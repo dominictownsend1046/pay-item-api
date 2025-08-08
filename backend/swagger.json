@@ -1,0 +1,71 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "PayItem API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/auth/token": {
+      "post": {
+        "summary": "Get access token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_id": { "type": "string" },
+                  "client_secret": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Access token"
+          }
+        }
+      }
+    },
+    "/api/payitem": {
+      "post": {
+        "summary": "Submit payitem",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ClientID": { "type": "string" },
+                  "SchemeID": { "type": "string" },
+                  "EmployeeID": { "type": "string" },
+                  "Payitemname": { "type": "string" },
+                  "Value": { "type": "number" },
+                  "Effectivedate": { "type": "string", "format": "date" }
+                },
+                "required": ["ClientID", "SchemeID", "EmployeeID", "Payitemname", "Value", "Effectivedate"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
