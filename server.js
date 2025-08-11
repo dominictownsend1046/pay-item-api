@@ -3,14 +3,16 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const payitemRoutes = require('./payitem');
 const keysRoutes = require('./keys');
-
+// :arrow_down: add these two lines
+const swaggerUi = require('swagger-ui-express');
+const swaggerDoc = require('./swagger.json');
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
-
 app.use('/api/payitem', payitemRoutes);
 app.use('/keys', keysRoutes);
-
+// :arrow_down: serve swagger at /docs
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc));
 app.post('/auth/token', (req, res) => {
   const { client_id, client_secret } = req.body || {};
   if (client_id === 'admin' && client_secret === 'password123') {
@@ -18,6 +20,5 @@ app.post('/auth/token', (req, res) => {
   }
   return res.status(401).json({ error: 'Invalid client credentials' });
 });
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API running on port ${PORT}`));
