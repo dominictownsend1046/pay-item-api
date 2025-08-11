@@ -1,136 +1,115 @@
 {
   "openapi": "3.0.0",
-  "info": {
-    "title": "PayItem API",
-    "version": "1.0.0"
-  },
-  "paths": {
-    "/auth/token": {
-      "post": {
-        "summary": "Get access token (demo)",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "client_id": {
-                    "type": "string"
-                  },
-                  "client_secret": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "client_id",
-                  "client_secret"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Access token"
-          }
-        }
-      }
-    },
-    "/api/payitem": {
-      "post": {
-        "summary": "Submit payitem",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "ClientID": {
-                    "type": "string"
-                  },
-                  "SchemeID": {
-                    "type": "string"
-                  },
-                  "EmployeeID": {
-                    "type": "string"
-                  },
-                  "Payitemname": {
-                    "type": "string"
-                  },
-                  "Value": {
-                    "type": "number"
-                  },
-                  "Effectivedate": {
-                    "type": "string",
-                    "pattern": "^\\d{2}/\\d{2}/\\d{4}$",
-                    "example": "07/08/2025"
-                  }
-                },
-                "required": [
-                  "ClientID",
-                  "SchemeID",
-                  "EmployeeID",
-                  "Payitemname",
-                  "Value",
-                  "Effectivedate"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created"
-          }
-        }
-      },
-      "get": {
-        "summary": "List payitems (filtered by date range)",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "start",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "description": "YYYY-MM-DD"
-          },
-          {
-            "name": "end",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "description": "YYYY-MM-DD"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
+  "info": { "title": "PayItem API", "version": "1.0.0" },
+  "servers": [{ "url": "/" }],
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "PayItem": {
+        "type": "object",
+        "required": ["ClientID","SchemeID","EmployeeID","Payitemname","Value","Effectivedate"],
+        "properties": {
+          "ClientID": { "type": "string" },
+          "SchemeID": { "type": "string" },
+          "EmployeeID": { "type": "string" },
+          "Payitemname": { "type": "string" },
+          "Value": { "type": "number" },
+          "Effectivedate": { "type": "string", "pattern": "^\\d{2}/\\d{2}/\\d{4}$", "example": "07/08/2025" }
         }
       }
     }
   },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
+  "paths": {
+    "/auth/token": {
+      "post": {
+        "summary": "Get an admin access token (demo)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["client_id","client_secret"],
+              "properties": {
+                "client_id": { "type": "string" },
+                "client_secret": { "type": "string" }
+              }
+            }
+          } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/payitem": {
+      "post": {
+        "summary": "Submit pay item",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PayItem" } } }
+        },
+        "responses": { "201": { "description": "Created" } }
+      },
+      "get": {
+        "summary": "List pay items (filter by date range)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "start", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "YYYY-MM-DD" },
+          { "name": "end", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "YYYY-MM-DD" }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/keys": {
+      "post": {
+        "summary": "Create/Update app key & secret (admin)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["companyId","schemeId","appKey","appSecret"],
+              "properties": {
+                "companyId": { "type": "string" },
+                "schemeId": { "type": "string" },
+                "appKey": { "type": "string" },
+                "appSecret": { "type": "string" }
+              }
+            }
+          } }
+        },
+        "responses": { "201": { "description": "Saved" } }
+      },
+      "get": {
+        "summary": "Lookup credentials (admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "companyId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "schemeId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "reveal", "in": "query", "required": false, "schema": { "type": "boolean" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/keys/exchange": {
+      "post": {
+        "summary": "Exchange app key/secret for an access token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["companyId","schemeId","appKey","appSecret"],
+              "properties": {
+                "companyId": { "type": "string" },
+                "schemeId": { "type": "string" },
+                "appKey": { "type": "string" },
+                "appSecret": { "type": "string" }
+              }
+            }
+          } }
+        },
+        "responses": { "200": { "description": "OK" } }
       }
     }
   }
