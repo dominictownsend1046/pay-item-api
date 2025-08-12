@@ -4,11 +4,16 @@ const router = express.Router();
 
 const keyStore = [];
 
-function authenticate(req, res, next) {
-  const auth = req.headers.authorization || '';
-  if (auth === 'Bearer secure_token_123') return next();
-  return res.status(403).json({ error: 'Unauthorized' });
+const auth = require('./secure-auth');
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  next();
 }
+router.post('/', auth.requireUser, requireAdmin, (req, res) => { /* create/update credentials */ });
+router.get('/',  auth.requireUser, requireAdmin, (req, res) => { /* lookup credentials */ });
+// Decide policy for /keys/exchange:
+// - If only logged-in users can exchange, add `auth.requireUser` here too.
+router.post('/exchange', auth.requireUser, (req, res) => { /* return token as before or refactor */ });
 
 const MASTER_KEY = (process.env.MASTER_KEY || '').slice(0, 32).padEnd(32, '0');
 
@@ -26,7 +31,7 @@ function decryptSecret(ivHex, encHex) {
   return dec.toString('utf8');
 }
 
-router.post('/', authenticate, (req, res) => {
+router.post('/', (req, res) => {
   const { companyId, schemeId, appKey, appSecret } = req.body || {};
   if (!companyId || !schemeId || !appKey || !appSecret) {
     return res.status(400).json({ error: 'companyId, schemeId, appKey, appSecret are required' });
@@ -38,7 +43,7 @@ router.post('/', authenticate, (req, res) => {
   return res.status(201).json({ message: 'Saved', companyId, schemeId, appKey });
 });
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', (req, res) => {
   const { companyId, schemeId, reveal } = req.query || {};
   if (!companyId || !schemeId) return res.status(400).json({ error: 'companyId and schemeId required' });
   const rec = keyStore.find(k => k.companyId === companyId && k.schemeId === schemeId);
