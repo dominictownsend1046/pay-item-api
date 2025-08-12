@@ -1,5 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const auth = require('./secure-auth');
+// Remove the old `authenticate` that checks for 'secure_token_123'
+// Now enforce user auth:
+router.post('/', auth.requireUser, (req, res) => {
+  // ... existing validation and push
+});
+router.get('/', auth.requireUser, (req, res) => {
+  // ... existing date filtering
+});
+module.exports = router;
 
 const payitems = [];
 
