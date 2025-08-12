@@ -19,7 +19,7 @@ function authenticate(req, res, next) {
   return res.status(403).json({ error: 'Unauthorized' });
 }
 
-router.post('/', authenticate, (req, res) => {
+router.post('/', (req, res) => {
   const { ClientID, SchemeID, EmployeeID, Payitemname, Value, Effectivedate } = req.body || {};
   if (!ClientID || !SchemeID || !EmployeeID || !Payitemname || typeof Value !== 'number' || !Effectivedate) {
     return res.status(400).json({ error: 'Missing or invalid fields' });
@@ -28,7 +28,7 @@ router.post('/', authenticate, (req, res) => {
   res.status(201).json({ message: 'Payitem stored successfully' });
 });
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', (req, res) => {
   const { start, end } = req.query || {};
   let filtered = payitems;
   if (start && end) {
