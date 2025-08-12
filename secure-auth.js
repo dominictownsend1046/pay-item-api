@@ -1,124 +1,127 @@
+
 const express = require('express');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
+
 const router = express.Router();
+
 /**
-Demo user store (in-memory).
-Replace with a DB in production.
+ * In-memory user store and token store.
+ * Replace with a DB for production.
  */
 const users = []; // { id, username, passwordHash, role }
-const JWT_ACCESS_SECRET  = process.env.JWT_ACCESS_SECRET  || 'change_me_access';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'change_me_refresh';
-const ACCESS_TTL_SECONDS = 10 * 60; // 10 minutes
-const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
-// Per-route brute-force limiter for login
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false
-});
-// Helpers
-function issueAccessToken(user) {
-  return jwt.sign(
-    { sub: user.id, username: user.username, role: user.role || 'user' },
-    JWT_ACCESS_SECRET,
-    { expiresIn: ACCESS_TTL_SECONDS }
-  );
+const tokens = new Map(); // token -> { userId, expiresAt }
+
+// Seed a default admin user from env (or fallback)
+const DEFAULT_USER = process.env.DEFAULT_USER || 'admin';
+const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'password123';
+const DEFAULT_ROLE = 'admin';
+
+(async () => {
+  const exists = users.find(u => u.username === DEFAULT_USER);
+  if (!exists) {
+    const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+    users.push({ id: '1', username: DEFAULT_USER, passwordHash, role: DEFAULT_ROLE });
+    // console.log('Seeded default admin user:', DEFAULT_USER);
+  }
+})();
+
+const ACCESS_SECONDS = 15 * 60; // 15 minutes
+
+function makeToken(len = 15) {
+  // 15-char URL-safe token (base62-like)
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  const bytes = crypto.randomBytes(len);
+  for (let i = 0; i < len; i++) {
+    out += chars[bytes[i] % chars.length];
+  }
+  return out;
 }
-function issueRefreshToken(user) {
-  return jwt.sign(
-    { sub: user.id, typ: 'refresh' },
-    JWT_REFRESH_SECRET,
-    { expiresIn: REFRESH_TTL_SECONDS }
-  );
+
+function issueToken(userId) {
+  const token = makeToken(15);
+  const expiresAt = Date.now() + ACCESS_SECONDS * 1000;
+  tokens.set(token, { userId, expiresAt });
+  return { token, expiresIn: ACCESS_SECONDS };
 }
-function setRefreshCookie(res, token) {
-  // httpOnly + secure + sameSite=lax to mitigate XSS/CSRF
-  res.cookie('refresh_token', token, {
-    httpOnly: true,
-    secure: true, // set false only for local http testing if needed
-    sameSite: 'lax',
-    maxAge: REFRESH_TTL_SECONDS * 1000,
-    path: '/auth'
-  });
+
+function revokeToken(token) {
+  tokens.delete(token);
 }
-function clearRefreshCookie(res) {
-  res.clearCookie('refresh_token', { path: '/auth' });
+
+function purgeExpired() {
+  const now = Date.now();
+  for (const [tok, meta] of tokens.entries()) {
+    if (meta.expiresAt <= now) tokens.delete(tok);
+  }
 }
-// Registration (keep disabled in prod or admin-only)
+setInterval(purgeExpired, 60 * 1000).unref();
+
+function getUserById(id) {
+  return users.find(u => u.id === id);
+}
+
+function getUserByUsername(username) {
+  return users.find(u => u.username === username);
+}
+
+// Registration (optional; protect in real life)
 router.post('/register', async (req, res) => {
   const { username, password, role } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'username and password required' });
-  if (users.find(u => u.username === username)) return res.status(409).json({ error: 'username taken' });
-  // OWASP: strong hashing with bcrypt (work factor 12+). Argon2id is also fine if available.
+  if (getUserByUsername(username)) return res.status(409).json({ error: 'username taken' });
   const passwordHash = await bcrypt.hash(password, 12);
   const user = { id: String(users.length + 1), username, passwordHash, role: role || 'user' };
   users.push(user);
   res.status(201).json({ id: user.id, username: user.username, role: user.role });
 });
-// Login → set refresh cookie + return short-lived access token
-router.post('/login', loginLimiter, async (req, res) => {
+
+// Login -> issue 15-char bearer token valid for 15 minutes
+router.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'username and password required' });
-  const user = users.find(u => u.username === username);
-  // Vague error message (don’t leak which field failed)
+  const user = getUserByUsername(username);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-  const access = issueAccessToken(user);
-  const refresh = issueRefreshToken(user);
-  setRefreshCookie(res, refresh);
-  res.json({ access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL_SECONDS });
+  const { token, expiresIn } = issueToken(user.id);
+  return res.json({ access_token: token, token_type: 'Bearer', expires_in: expiresIn });
 });
-// Refresh → read refresh cookie and rotate
-router.post('/refresh', (req, res) => {
-  const token = req.cookies?.refresh_token;
-  if (!token) return res.status(401).json({ error: 'No refresh token' });
-  try {
-    const payload = jwt.verify(token, JWT_REFRESH_SECRET);
-    const user = users.find(u => u.id === payload.sub);
-    if (!user) return res.status(401).json({ error: 'Invalid token' });
-    // Rotate
-    const newRefresh = issueRefreshToken(user);
-    setRefreshCookie(res, newRefresh);
-    const access = issueAccessToken(user);
-    res.json({ access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL_SECONDS });
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-});
-// Logout
+
+// Logout -> revoke token
 router.post('/logout', (req, res) => {
-  clearRefreshCookie(res);
-  res.status(204).end();
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (token) revokeToken(token);
+  return res.status(204).end();
 });
-// Who am I (for the UI)
+
+// Me
 router.get('/me', (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
-    res.json({ userId: payload.sub, username: payload.username, role: payload.role });
-  } catch {
-    res.status(401).json({ error: 'Unauthorized' });
-  }
+  const meta = tokens.get(token);
+  if (!meta || meta.expiresAt <= Date.now()) return res.status(401).json({ error: 'Unauthorized' });
+  const user = getUserById(meta.userId);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  return res.json({ userId: user.id, username: user.username, role: user.role, expires_at: meta.expiresAt });
 });
-// Reusable middleware for protected routes (access token)
+
+// Middleware for protected routes
 function requireUser(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
-    req.user = { id: payload.sub, username: payload.username, role: payload.role };
-    next();
-  } catch {
-    res.status(401).json({ error: 'Unauthorized' });
-  }
+  const meta = tokens.get(token);
+  if (!meta || meta.expiresAt <= Date.now()) return res.status(401).json({ error: 'Unauthorized' });
+  const user = getUserById(meta.userId);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  req.user = { id: user.id, username: user.username, role: user.role };
+  next();
 }
-// Export middleware to protect your existing routes
+
 router.requireUser = requireUser;
+
 module.exports = router;

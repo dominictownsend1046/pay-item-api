@@ -1,40 +1,26 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const cookieParser = require('cookie-parser');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const payitemRoutes = require('./payitem');
+const authRoutes = require('./secure-auth');
 const keysRoutes = require('./keys');
-const authRoutes = require('./secure-auth'); // NEW
+// :arrow_down: add these two lines
 const swaggerUi = require('swagger-ui-express');
 const swaggerDoc = require('./swagger.json');
 const app = express();
-// --- Security headers
-app.use(helmet({
-  contentSecurityPolicy: false, // keep false for dev if embedding swagger-ui
-  frameguard: { action: 'deny' }
-}));
-// --- Parse
+app.use(cors());
 app.use(bodyParser.json());
-app.use(cookieParser());
-// --- CORS (allow frontend origin + cookies)
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
-app.use(cors({
-  origin: FRONTEND_ORIGIN,
-  credentials: true
-}));
-// --- Global rate limit (tune as needed)
-app.use(rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300, // overall cap
-  standardHeaders: true,
-  legacyHeaders: false
-}));
-// Routes
 app.use('/auth', authRoutes);
 app.use('/api/payitem', payitemRoutes);
 app.use('/keys', keysRoutes);
+// :arrow_down: serve swagger at /docs
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc));
+app.post('/auth/token', (req, res) => {
+  const { client_id, client_secret } = req.body || {};
+  if (client_id === 'admin' && client_secret === 'password123') {
+    return res.json({ access_token: 'secure_token_123', token_type: 'Bearer', expires_in: 3600 });
+  }
+  return res.status(401).json({ error: 'Invalid client credentials' });
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API running on port ${PORT}`));
