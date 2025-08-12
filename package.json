@@ -5,7 +5,12 @@
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "prisma:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:dev": "prisma migrate dev --name init",
+    "db:seed-admin": "node scripts/seed-admin.js",
+    "start:render": "prisma migrate deploy && node server.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -13,6 +18,10 @@
     "express": "^4.19.2",
     "swagger-ui-express": "^4.6.3",
     "redis": "^4.6.13",
-    "bcrypt": "^5.1.1"
+    "bcrypt": "^5.1.1",
+    "@prisma/client": "^5.16.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.16.0"
   }
 }
