@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         String   @default("user")
+  createdAt    DateTime @default(now())
+}
+
+model PayItem {
+  id            String   @id @default(cuid())
+  clientId      String
+  schemeId      String
+  employeeId    String
+  payitemName   String
+  value         Decimal
+  effectiveDate DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([schemeId, effectiveDate])
+}
+
+model AppCredential {
+  id         String   @id @default(cuid())
+  companyId  String
+  schemeId   String
+  appKey     String
+  secretEnc  String
+  iv         String
+  createdAt  DateTime @default(now())
+
+  @@unique([companyId, schemeId, appKey])
+}
+
+model Token {
+  token     String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
