@@ -59,7 +59,7 @@ router.post('/exchange', (req, res) => {
   if (!rec) return res.status(401).json({ error: 'Invalid credentials' });
   const secret = decryptSecret(rec.iv, rec.secretEnc);
   if (secret !== appSecret) return res.status(401).json({ error: 'Invalid credentials' });
-  return res.json({ access_token: 'secure_token_123', token_type: 'Bearer', expires_in: 3600 });
+  return auth.issueServiceToken(`svc:${companyId}:${schemeId}`).then(t => res.json({ access_token: t.token, token_type: 'Bearer', expires_in: t.expiresIn }));
 });
 
 module.exports = router;
