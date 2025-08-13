@@ -108,6 +108,18 @@ async function getTokenMeta(token) {
   return await tokenStore.get(token);
 }
 
+
+async function issueServiceToken(username) {
+  // Service principals are represented as users with role 'service'.
+  if (!username) username = 'service';
+  let u = getUserByUsername(username);
+  if (!u) {
+    u = { id: String(users.length + 1), username, passwordHash: '', role: 'service' };
+    users.push(u);
+  }
+  const out = await issueToken(u.id);
+  return out; // { token, expiresIn }
+}
 function getUserById(id) {
   return users.find(u => u.id === id);
 }
@@ -178,5 +190,6 @@ async function requireUser(req, res, next) {
 }
 
 router.requireUser = requireUser;
+router.issueServiceToken = issueServiceToken;
 
 module.exports = router;
